@@ -1,13 +1,8 @@
 package org.pentaho.engops;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.StringReader;
 import java.io.StringWriter;
-import java.net.URL;
-import java.util.Enumeration;
-import java.util.HashMap;
 
 import javax.servlet.Filter;
 import javax.servlet.FilterChain;
@@ -25,12 +20,9 @@ import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
 import org.apache.http.HttpEntity;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.slf4j.Logger;
@@ -91,27 +83,8 @@ public class IvySnapshotServletFilter implements Filter {
         String mavenMetadataURL = url.substring( 0, url.lastIndexOf( "/" ) ) + "/maven-metadata.xml";
         logger.debug( "metadata file: " + mavenMetadataURL );
         
-        
-        String metadataXml = "";
-        CloseableHttpClient httpClient = HttpClients.createDefault();
-        HttpGet httpGet = new HttpGet(mavenMetadataURL);
-        CloseableHttpResponse httpResponse = httpClient.execute(httpGet);
-        try {
-          HttpEntity entity = httpResponse.getEntity();
-          if (entity != null) {
-             metadataXml = EntityUtils.toString(entity);
-          } else {
-            logger.warn( "error loading " + mavenMetadataURL );
-            chain.doFilter( request, response );
-            return;
-          }
-        } catch (Exception e) {
-          logger.warn( "error loading " + mavenMetadataURL, e );
-          chain.doFilter( request, response );
-          return;
-        } finally {
-          httpResponse.close();
-        }
+        HttpGetUtil httpGetUtil = HttpGetUtilFactory.getInstance();
+        String metadataXml = httpGetUtil.get(mavenMetadataURL);
 
         try {
           DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -131,6 +104,7 @@ public class IvySnapshotServletFilter implements Filter {
           String snapshotVersion = snapshotLabel;
           
           NodeList snapshotVersionNodeList = metadataDocument.getElementsByTagName( "snapshotVersion" );
+          /***** iterate all the snapshotVersion nodes looking for the matching extension and optional classifier *****/
           for ( int indexA=0 ; indexA < snapshotVersionNodeList.getLength() ; indexA++ ) {
             Node snapshotVersionNode = snapshotVersionNodeList.item( indexA );
             if (snapshotVersionNode.getNodeType() == Node.ELEMENT_NODE) {
@@ -147,37 +121,64 @@ public class IvySnapshotServletFilter implements Filter {
               }
               logger.debug( "examining node with extension " + extension );
               if ( extension.equals(artifactExtension) ) {
-                logger.debug( extension + " matches artifact extension of " + artifactExtension );            
+                logger.debug( extension + " matches artifact extension of " + artifactExtension );
+                
+                String value = "";
+                /***** get the value of the snapshotVersion for this node ******/
                 NodeList valueNodeList = snapshotVersionElement.getElementsByTagName( "value" );
                 for ( int indexC=0 ; indexC < valueNodeList.getLength() ; indexC++ ) {
                   Node valueNode = valueNodeList.item( indexC );
                   if ( valueNode.getNodeType() == Node.ELEMENT_NODE ) {
                     Element valueElement = (Element) valueNode;
-                    String value = valueElement.getFirstChild().getNodeValue().trim();
+                    value = valueElement.getFirstChild().getNodeValue().trim();
                     logger.debug( "value of this node is " + value );
-                    if (artifactClassifier.length() > 0) {
-                      NodeList classifierNodeList = snapshotVersionElement.getElementsByTagName("classifier");
-                      for (int indexD = 0; indexD < classifierNodeList.getLength(); indexD++) {
-                        Node classifierNode = classifierNodeList.item(indexD);
-                        if (classifierNode.getNodeType() == Node.ELEMENT_NODE) {
-                          Element classifierElement = (Element) classifierNode;
-                          String classifier = classifierElement.getFirstChild().getNodeValue().trim();
-                          logger.debug( "classifer " + classifier + " found" );
-                          if ( artifactClassifier.equals(classifier) ) {
-                            logger.debug( classifier + " matches artifact classifier of " + artifactClassifier );
-                            snapshotVersion = value;
-                            break;
-                          }
-                        }
-                      }
-                      
-                    } else {
-                      snapshotVersion = value;
-                    }
+                  }
+                  break;
+                }
+                
+                String classifier = "";
+                /***** let's see if this node has a classifier ******/
+                NodeList classifierNodeList = snapshotVersionElement.getElementsByTagName("classifier");
+                for (int indexD = 0; indexD < classifierNodeList.getLength(); indexD++) {
+                  Node classifierNode = classifierNodeList.item(indexD);
+                  if (classifierNode.getNodeType() == Node.ELEMENT_NODE) {
+                    Element classifierElement = (Element) classifierNode;
+                    classifier = classifierElement.getFirstChild().getNodeValue().trim();
+                    logger.debug( "classifer " + classifier + " found" );
+                  }
+                  break;
+                }
+                
+                if (artifactClassifier.length() > 0) {
+                  /***** requested artifact does have a classifier *****/
+                  boolean classifierFound = false;
+                  
+                  if ( artifactClassifier.equals(classifier) ) {
+                    logger.debug( classifier + " matches artifact classifier of " + artifactClassifier );
+                    snapshotVersion = value;
+                    classifierFound = true;
+                    break;
+                  }
+                  
+                  if (!classifierFound) {
+                    logger.debug( "classifier " + artifactClassifier + " not found on this node, continuing node search .." );
+                    continue;
+                  }
+
+                } else {
+                  /***** requested artifact does not have a classifier *****/
+                  if (classifier.length() > 0) {
+                    logger.debug ("this node has a classifier and we don't want that, continuing node search ...");
+                    continue;
+                  } else {
+                    logger.debug ( "found the right node without a classifier" );
+                    snapshotVersion = value;
+                    break;
                   }
                 }
-                break;
+
               }
+            
             }
             
           }

@@ -5,7 +5,7 @@
   <groupId>org.pentaho.engops</groupId>
   <artifactId>ivy-snapshot-servlet-filter</artifactId>
   <version>1.0.0-SNAPSHOT</version>
-  <packaging>jar</packaging>
+  <packaging>pom</packaging>
 
   <parent>
     <groupId>org.pentaho</groupId>
@@ -46,6 +46,61 @@
     <developerConnection>scm:git:git@github.com:${github.user}/${project.artifactId}.git</developerConnection>
     <tag>HEAD</tag>
   </scm>
+  
+  <build>
+    <plugins>
+    
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.1</version>
+        <executions>
+          <execution>
+            <id>compile</id>
+            <phase>compile</phase>
+            <goals>
+              <goal>compile</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>2.5</version>
+        <executions>
+          <execution>
+            <id>nexus-jar</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+            <configuration>
+              <classifier>nexus</classifier>
+              <excludes>
+                <exclude>**/CommonsHttpGetUtil*</exclude>
+              </excludes>
+            </configuration>
+          </execution>
+          <execution>
+            <id>artifactory-jar</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+            <configuration>
+              <classifier>artifactory</classifier>
+              <excludes>
+                <exclude>**/ApacheHttpGetUtil*</exclude>
+              </excludes>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      
+    </plugins>
+  </build>
     
   <dependencies>
     <!-- 'COMPILE' SCOPED DEPS -->
@@ -66,9 +121,17 @@
       <scope>provided</scope>
     </dependency>
     <dependency>
+      <!-- for nexus -->
       <groupId>org.apache.httpcomponents</groupId>
       <artifactId>httpclient</artifactId>
       <version>4.3.3</version>
+    </dependency>
+    <dependency>
+      <!-- for artifactory -->
+      <groupId>commons-httpclient</groupId>
+      <artifactId>commons-httpclient</artifactId>
+      <version>3.1</version>
+      <scope>provided</scope>
     </dependency>
     
     <!-- 'TEST' SCOPED DEPS -->
