@@ -1,16 +1,18 @@
 package org.pentaho.engops;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.StringReader;
 import java.io.StringWriter;
+import java.net.URL;
+import java.net.URLConnection;
+import java.util.ResourceBundle;
 
-import javax.servlet.Filter;
-import javax.servlet.FilterChain;
-import javax.servlet.FilterConfig;
 import javax.servlet.ServletException;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
+import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.OutputKeys;
@@ -19,6 +21,12 @@ import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
+import org.apache.http.HttpEntity;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
@@ -27,28 +35,46 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 
-public class IvySnapshotServletFilter implements Filter {
+public class IvySnapshotServletFilter extends HttpServlet {
+
+  private static final long serialVersionUID = 1L;
+
   private static Logger logger = LoggerFactory.getLogger( IvySnapshotServletFilter.class );
 
-  @Override
-  public void destroy() {
-    // TODO Auto-generated method stub
-
+  public static String proxiedServerContext;
+  
+  static {
+    proxiedServerContext = System.getProperty( "proxiedServerContext" );
+    if (proxiedServerContext == null) {
+      System.out.println("specify the proxied repo as (e.g.) -DproxiedServerContext=http://nexus.pentaho.org:8080/nexus");
+      System.exit( 1 );
+    }
   }
+  
 
   @Override
-  public void doFilter( ServletRequest request, ServletResponse response, FilterChain chain ) throws IOException,
-    ServletException {
+  public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
 
-    if ( request instanceof HttpServletRequest ) {
-      HttpServletRequest httpRequest = (HttpServletRequest) request;
-      String url = httpRequest.getRequestURL().toString();
+     
+      String url = request.getRequestURL().toString();
       logger.debug( "requested url: " + url );
+      
+      String serverPort = url.substring( 0, url.indexOf( "/", url.indexOf( "://" ) +3 ));
+      logger.debug( "serverPort: " + serverPort );
+      
+      String path = url.substring( url.indexOf( "/", url.indexOf( "://" ) +3 ), url.lastIndexOf( "/" ) + 1 );
+      logger.debug( "path: " + path );
 
       String filename = url.substring(url.lastIndexOf( "/" ) + 1,url.length());
       logger.debug( "filename: " + filename);
       
-      if ( filename.contains( "SNAPSHOT" ) && !url.endsWith( "maven-metadata.xml" )) {
+      if ( filename.contains( "SNAPSHOT" ) 
+            && !filename.contains( "maven-metadata.xml") 
+            && (  filename.endsWith( ".xml" )
+                  || filename.endsWith( ".js" )
+                  || filename.endsWith( ".jar" )
+                  || filename.endsWith( ".zip" )
+                  || filename.endsWith( ".gz" ) ) ) {
         
         int lastDirSeparator = url.lastIndexOf( "/" );
         int secondToLastDirSeparator = url.substring( 0,lastDirSeparator ).lastIndexOf( "/" );
@@ -74,11 +100,31 @@ public class IvySnapshotServletFilter implements Filter {
         logger.debug( "classifer: " + artifactClassifier);
         logger.debug( "extension: " + artifactExtension );
         
-        String mavenMetadataURL = url.substring( 0, url.lastIndexOf( "/" ) ) + "/maven-metadata.xml";
+
+        String mavenMetadataURL = proxiedServerContext + path + "maven-metadata.xml";
         logger.debug( "metadata file: " + mavenMetadataURL );
         
-        HttpGetUtil httpGetUtil = HttpGetUtilFactory.getInstance();
-        String metadataXml = httpGetUtil.get(mavenMetadataURL);
+        String metadataXml = "";
+        CloseableHttpClient httpClient = HttpClients.createDefault();
+        HttpGet httpGet = new HttpGet(mavenMetadataURL);
+        CloseableHttpResponse httpResponse = null;
+        try {
+          httpResponse = httpClient.execute(httpGet);
+          HttpEntity entity = httpResponse.getEntity();
+          if (entity != null) {
+             metadataXml = EntityUtils.toString(entity);
+          } else {
+            logger.warn( "error loading " + url );
+          }
+        } catch (Exception e) {
+          logger.warn( "error loading " + url, e );
+        } finally {
+          try {
+            httpResponse.close();
+          } catch ( IOException e ) {
+            logger.warn( "can't close connection", e );
+          }
+        }
 
         try {
           DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -183,33 +229,50 @@ public class IvySnapshotServletFilter implements Filter {
           } else {
             snapshotFile = artifactId + "-" + snapshotVersion + "." + artifactExtension;
           }
+
           
-          logger.info( "replacing " + filename + " request with " + snapshotFile );
-          request.getRequestDispatcher( snapshotFile ).forward( request, response );
+          logger.info( "proxying the request for:" );
+          logger.info( "\t" + path + filename );
+          logger.info( "from:" );
+          logger.info( "\t" + proxiedServerContext + path + snapshotFile );
           
-        
+          if (  filename.endsWith( ".xml" ) ) {
+            response.setContentType( "application/xml" );
+          } else if (  filename.endsWith( ".js" ) ) {
+            response.setContentType( "application/javascript" );
+          } else if (  filename.endsWith( ".jar" ) ) {
+            response.setContentType( "application/java-archive" );
+          } else if (  filename.endsWith( ".zip" ) ) {
+            response.setContentType( "application/zip" );
+          } else {
+            response.setContentType( "application/octet-stream" );
+          }
+          
+          OutputStream out = response.getOutputStream();
+          URL replacementFileURL = new URL(proxiedServerContext + path + snapshotFile);
+          URLConnection conn = replacementFileURL.openConnection();
+          InputStream in = conn.getInputStream();
+          
+          byte[] buffer = new byte[1024];
+          int bytesRead;
+          while ((bytesRead = in.read(buffer)) != -1)
+          {
+              out.write(buffer, 0, bytesRead);
+          }
+                    
+          out.close();
+                  
         } catch (Exception e) {
           logger.error("error while parsing XML", e);
-          chain.doFilter( request, response );
+          response.sendRedirect( proxiedServerContext + path + filename );
           return;
         }
         
       } else {
-        logger.debug( "not the droids you are looking for" );
-        chain.doFilter( request, response );
+        response.sendRedirect( proxiedServerContext + path + filename );
       }
-    } else {
-      logger.debug( "not an http servlet request" );
-      chain.doFilter( request, response );
-    }
 
     
-  }
-
-  @Override
-  public void init( FilterConfig arg0 ) throws ServletException {
-    // TODO Auto-generated method stub
-
   }
 
 }
