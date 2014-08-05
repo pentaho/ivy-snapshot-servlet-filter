@@ -1,13 +1,9 @@
 package org.pentaho.engops;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.StringReader;
 import java.io.StringWriter;
-import java.net.URL;
-import java.net.URLConnection;
-import java.util.ResourceBundle;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -21,6 +17,7 @@ import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 
+import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -54,19 +51,16 @@ public class IvySnapshotServletFilter extends HttpServlet {
 
   @Override
   public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-
-     
+      
+   
       String url = request.getRequestURL().toString();
       logger.debug( "requested url: " + url );
       
-      String serverPort = url.substring( 0, url.indexOf( "/", url.indexOf( "://" ) +3 ));
-      logger.debug( "serverPort: " + serverPort );
-      
       String path = url.substring( url.indexOf( "/", url.indexOf( "://" ) +3 ), url.lastIndexOf( "/" ) + 1 );
-      logger.debug( "path: " + path );
+      //logger.debug( "path: " + path );
 
       String filename = url.substring(url.lastIndexOf( "/" ) + 1,url.length());
-      logger.debug( "filename: " + filename);
+      //logger.debug( "filename: " + filename);
       
       if ( filename.contains( "SNAPSHOT" ) 
             && !filename.contains( "maven-metadata.xml") 
@@ -74,7 +68,9 @@ public class IvySnapshotServletFilter extends HttpServlet {
                   || filename.endsWith( ".js" )
                   || filename.endsWith( ".jar" )
                   || filename.endsWith( ".zip" )
-                  || filename.endsWith( ".gz" ) ) ) {
+                  || filename.endsWith( ".gz" )
+                  || filename.endsWith( ".sha1" )
+                  || filename.endsWith( ".md5" )) ) {
         
         int lastDirSeparator = url.lastIndexOf( "/" );
         int secondToLastDirSeparator = url.substring( 0,lastDirSeparator ).lastIndexOf( "/" );
@@ -98,7 +94,17 @@ public class IvySnapshotServletFilter extends HttpServlet {
           artifactExtension = classifierExtension.substring(1,classifierExtension.length());
         }
         logger.debug( "classifer: " + artifactClassifier);
+        
+        String hashType = "";
+        if (artifactExtension.endsWith(".sha1")) {
+          artifactExtension = artifactExtension.substring( 0, artifactExtension.indexOf( ".sha1" ) );
+          hashType = ".sha1";
+        } else if (artifactExtension.endsWith(".md5")) {
+          artifactExtension = artifactExtension.substring( 0, artifactExtension.indexOf( ".md5" ) );
+          hashType = ".md5";
+        }
         logger.debug( "extension: " + artifactExtension );
+        logger.debug( "hash type: " + hashType );
         
 
         String mavenMetadataURL = proxiedServerContext + path + "maven-metadata.xml";
@@ -225,16 +231,17 @@ public class IvySnapshotServletFilter extends HttpServlet {
           
           String snapshotFile = filename;
           if (artifactClassifier.length() > 0) {
-            snapshotFile = artifactId + "-" + snapshotVersion + "-" + artifactClassifier + "." + artifactExtension;
+            snapshotFile = artifactId + "-" + snapshotVersion + "-" + artifactClassifier + "." + artifactExtension + hashType;
           } else {
-            snapshotFile = artifactId + "-" + snapshotVersion + "." + artifactExtension;
+            snapshotFile = artifactId + "-" + snapshotVersion + "." + artifactExtension + hashType;
           }
 
-          
+          logger.info( "##################################################################" );
           logger.info( "proxying the request for:" );
           logger.info( "\t" + path + filename );
           logger.info( "from:" );
           logger.info( "\t" + proxiedServerContext + path + snapshotFile );
+          logger.info( "##################################################################" );
           
           if (  filename.endsWith( ".xml" ) ) {
             response.setContentType( "application/xml" );
@@ -244,23 +251,44 @@ public class IvySnapshotServletFilter extends HttpServlet {
             response.setContentType( "application/java-archive" );
           } else if (  filename.endsWith( ".zip" ) ) {
             response.setContentType( "application/zip" );
+          } else if (  filename.endsWith( ".sha1" ) || filename.endsWith( ".md5" ) ) {
+            response.setContentType( "text/plain" );
           } else {
             response.setContentType( "application/octet-stream" );
           }
           
-          OutputStream out = response.getOutputStream();
-          URL replacementFileURL = new URL(proxiedServerContext + path + snapshotFile);
-          URLConnection conn = replacementFileURL.openConnection();
-          InputStream in = conn.getInputStream();
           
-          byte[] buffer = new byte[1024];
-          int bytesRead;
-          while ((bytesRead = in.read(buffer)) != -1)
-          {
-              out.write(buffer, 0, bytesRead);
+          url = proxiedServerContext + path + snapshotFile;
+          OutputStream out = response.getOutputStream();
+          
+          httpClient = HttpClients.createDefault();
+          httpGet = new HttpGet(url);
+          httpResponse = null;
+          try {
+            httpResponse = httpClient.execute(httpGet);
+            HttpEntity entity = httpResponse.getEntity();
+            
+            // transfer headers over to the new stream, "Last-Modified" is particularly important
+            for (Header header : httpResponse.getAllHeaders()) {
+              response.setHeader( header.getName(), header.getValue() );
+            }
+            
+            if (entity != null) {
+               entity.writeTo( out );
+            } else {
+              logger.warn( "error loading " + url );
+            }
+          } catch (Exception e) {
+            logger.warn( "error loading " + url, e );
+          } finally {
+            try {
+              httpResponse.close();
+            } catch ( IOException e ) {
+              logger.warn( "can't close connection", e );
+            }
           }
-                    
-          out.close();
+          
+          out.close();                 
                   
         } catch (Exception e) {
           logger.error("error while parsing XML", e);
@@ -269,6 +297,7 @@ public class IvySnapshotServletFilter extends HttpServlet {
         }
         
       } else {
+        logger.debug( "redirecting request to: " + proxiedServerContext + path + filename );
         response.sendRedirect( proxiedServerContext + path + filename );
       }
 
