@@ -69,6 +69,7 @@ public class IvySnapshotServletFilter extends HttpServlet {
                   || filename.endsWith( ".jar" )
                   || filename.endsWith( ".zip" )
                   || filename.endsWith( ".gz" )
+                  || filename.endsWith( ".pom" )
                   || filename.endsWith( ".sha1" )
                   || filename.endsWith( ".md5" )) ) {
         
@@ -243,7 +244,7 @@ public class IvySnapshotServletFilter extends HttpServlet {
           logger.info( "\t" + proxiedServerContext + path + snapshotFile );
           logger.info( "##################################################################" );
           
-          if (  filename.endsWith( ".xml" ) ) {
+          if (  filename.endsWith( ".xml" ) || filename.endsWith( ".pom" ) ) {
             response.setContentType( "application/xml" );
           } else if (  filename.endsWith( ".js" ) ) {
             response.setContentType( "application/javascript" );
