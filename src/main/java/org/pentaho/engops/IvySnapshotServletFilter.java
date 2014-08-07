@@ -230,6 +230,41 @@ public class IvySnapshotServletFilter extends HttpServlet {
             
           }
           
+          if (snapshotVersionNodeList.getLength() == 0) {
+            // there may be only one type of artifact here, so let's try using the versioning/snapshot element
+            
+            NodeList snapshotNodeList = metadataDocument.getElementsByTagName( "snapshot" );
+            for ( int indexA=0 ; indexA < snapshotVersionNodeList.getLength() ; indexA++ ) {
+              Node snapshotNode = snapshotNodeList.item( indexA );
+              if (snapshotNode.getNodeType() == Node.ELEMENT_NODE) {
+                Element snapshotElement = (Element) snapshotNode;
+                
+                String timestamp = "";
+                NodeList timestampNodeList = snapshotElement.getElementsByTagName( "timestamp" );
+                for ( int indexB=0 ; indexB < timestampNodeList.getLength() ; indexB++ ) {
+                  Node timestampNode = timestampNodeList.item( indexB );
+                  if (timestampNode.getNodeType() == Node.ELEMENT_NODE){
+                    Element timestampElement = (Element) timestampNode;
+                    timestamp = timestampElement.getFirstChild().getNodeValue().trim();
+                  }
+                }
+                
+                String buildNumber = "";
+                NodeList buildNumberNodeList = snapshotElement.getElementsByTagName( "buildNumber" );
+                for ( int indexB=0 ; indexB < buildNumberNodeList.getLength() ; indexB++ ) {
+                  Node buildNumberNode = buildNumberNodeList.item( indexB );
+                  if (buildNumberNode.getNodeType() == Node.ELEMENT_NODE){
+                    Element buildNumberElement = (Element) buildNumberNode;
+                    buildNumber = buildNumberElement.getFirstChild().getNodeValue().trim();
+                  }
+                }
+            
+                snapshotVersion = timestamp + "-" + buildNumber;
+                break;
+              }
+            }
+          }
+          
           String snapshotFile = filename;
           if (artifactClassifier.length() > 0) {
             snapshotFile = artifactId + "-" + snapshotVersion + "-" + artifactClassifier + "." + artifactExtension + hashType;
