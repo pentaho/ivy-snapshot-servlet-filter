@@ -150,12 +150,14 @@ public class IvySnapshotServletFilter extends HttpServlet {
           
           String snapshotVersion = snapshotLabel;
           
+          boolean hasSnapshotVersionElements = false;
           NodeList snapshotVersionNodeList = metadataDocument.getElementsByTagName( "snapshotVersion" );
           /***** iterate all the snapshotVersion nodes looking for the matching extension and optional classifier *****/
           for ( int indexA=0 ; indexA < snapshotVersionNodeList.getLength() ; indexA++ ) {
             Node snapshotVersionNode = snapshotVersionNodeList.item( indexA );
             if (snapshotVersionNode.getNodeType() == Node.ELEMENT_NODE) {
               Element snapshotVersionElement = (Element) snapshotVersionNode;
+              hasSnapshotVersionElements = true;
               NodeList extensionNodeList = snapshotVersionElement.getElementsByTagName( "extension" );
               String extension = "";
               for ( int indexB=0 ; indexB < extensionNodeList.getLength() ; indexB++ ) {
@@ -230,11 +232,11 @@ public class IvySnapshotServletFilter extends HttpServlet {
             
           }
           
-          if (snapshotVersionNodeList.getLength() == 0) {
+          if (!hasSnapshotVersionElements) {
             // there may be only one type of artifact here, so let's try using the versioning/snapshot element
             
             NodeList snapshotNodeList = metadataDocument.getElementsByTagName( "snapshot" );
-            for ( int indexA=0 ; indexA < snapshotVersionNodeList.getLength() ; indexA++ ) {
+            for ( int indexA=0 ; indexA < snapshotNodeList.getLength() ; indexA++ ) {
               Node snapshotNode = snapshotNodeList.item( indexA );
               if (snapshotNode.getNodeType() == Node.ELEMENT_NODE) {
                 Element snapshotElement = (Element) snapshotNode;
@@ -259,10 +261,11 @@ public class IvySnapshotServletFilter extends HttpServlet {
                   }
                 }
             
-                snapshotVersion = timestamp + "-" + buildNumber;
+                snapshotVersion = snapshotLabel.substring( 0, snapshotLabel.indexOf( "-SNAPSHOT" ) ) + "-" + timestamp + "-" + buildNumber;
                 break;
               }
             }
+            
           }
           
           String snapshotFile = filename;
