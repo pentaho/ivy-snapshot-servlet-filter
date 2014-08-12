@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.StringReader;
 import java.io.StringWriter;
+import java.util.Enumeration;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -54,6 +55,12 @@ public class IvySnapshotServletFilter extends HttpServlet {
     logger.debug( "HTTP DELETE received ... redirecting ..." );
     String url = request.getRequestURL().toString();
     String path = url.substring( url.indexOf( "/", url.indexOf( "://" ) +3 ), url.length() );
+    Enumeration<String> headerNames = request.getHeaderNames();
+    while (headerNames.hasMoreElements()) {
+      String headerName = headerNames.nextElement();
+      String headerValue = request.getHeader( headerName );
+      response.setHeader( headerName, headerValue );
+    }  
     response.sendRedirect( proxiedServerContext + path );
   }
 
@@ -63,6 +70,12 @@ public class IvySnapshotServletFilter extends HttpServlet {
     logger.debug( "HTTP POST received ... redirecting ..." );
     String url = request.getRequestURL().toString();
     String path = url.substring( url.indexOf( "/", url.indexOf( "://" ) +3 ), url.length() );
+    Enumeration<String> headerNames = request.getHeaderNames();
+    while (headerNames.hasMoreElements()) {
+      String headerName = headerNames.nextElement();
+      String headerValue = request.getHeader( headerName );
+      response.setHeader( headerName, headerValue );
+    }  
     response.sendRedirect( proxiedServerContext + path );
   }
 
@@ -72,6 +85,12 @@ public class IvySnapshotServletFilter extends HttpServlet {
     logger.debug( "HTTP PUT received ... redirecting ..." );
     String url = request.getRequestURL().toString();
     String path = url.substring( url.indexOf( "/", url.indexOf( "://" ) +3 ), url.length() );
+    Enumeration<String> headerNames = request.getHeaderNames();
+    while (headerNames.hasMoreElements()) {
+      String headerName = headerNames.nextElement();
+      String headerValue = request.getHeader( headerName );
+      response.setHeader( headerName, headerValue );
+    }  
     response.sendRedirect( proxiedServerContext + path );
   }
 
