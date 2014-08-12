@@ -7,6 +7,7 @@ import java.io.StringWriter;
 import java.util.Enumeration;
 
 import javax.servlet.ServletException;
+import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -52,46 +53,28 @@ public class IvySnapshotServletFilter extends HttpServlet {
 
   @Override
   protected void doDelete( HttpServletRequest request, HttpServletResponse response ) throws ServletException, IOException {
-    logger.debug( "HTTP DELETE received ... redirecting ..." );
+    logger.debug( "HTTP DELETE received ... proxying ..." );
     String url = request.getRequestURL().toString();
     String path = url.substring( url.indexOf( "/", url.indexOf( "://" ) +3 ), url.length() );
-    Enumeration<String> headerNames = request.getHeaderNames();
-    while (headerNames.hasMoreElements()) {
-      String headerName = headerNames.nextElement();
-      String headerValue = request.getHeader( headerName );
-      response.setHeader( headerName, headerValue );
-    }  
-    response.sendRedirect( proxiedServerContext + path );
+    this.proxy( proxiedServerContext + path, request, response );
   }
 
 
   @Override
   protected void doPost( HttpServletRequest request, HttpServletResponse response ) throws ServletException, IOException {
-    logger.debug( "HTTP POST received ... redirecting ..." );
+    logger.debug( "HTTP POST received ... proxying ..." );
     String url = request.getRequestURL().toString();
     String path = url.substring( url.indexOf( "/", url.indexOf( "://" ) +3 ), url.length() );
-    Enumeration<String> headerNames = request.getHeaderNames();
-    while (headerNames.hasMoreElements()) {
-      String headerName = headerNames.nextElement();
-      String headerValue = request.getHeader( headerName );
-      response.setHeader( headerName, headerValue );
-    }  
-    response.sendRedirect( proxiedServerContext + path );
+    this.proxy( proxiedServerContext + path, request, response );
   }
 
 
   @Override
   protected void doPut( HttpServletRequest request, HttpServletResponse response ) throws ServletException, IOException {
-    logger.debug( "HTTP PUT received ... redirecting ..." );
+    logger.debug( "HTTP PUT received ... proxying ..." );
     String url = request.getRequestURL().toString();
     String path = url.substring( url.indexOf( "/", url.indexOf( "://" ) +3 ), url.length() );
-    Enumeration<String> headerNames = request.getHeaderNames();
-    while (headerNames.hasMoreElements()) {
-      String headerName = headerNames.nextElement();
-      String headerValue = request.getHeader( headerName );
-      response.setHeader( headerName, headerValue );
-    }  
-    response.sendRedirect( proxiedServerContext + path );
+    this.proxy( proxiedServerContext + path, request, response );
   }
 
 
@@ -341,39 +324,9 @@ public class IvySnapshotServletFilter extends HttpServlet {
           } else {
             response.setContentType( "application/octet-stream" );
           }
-          
-          
+                    
           url = proxiedServerContext + path + snapshotFile;
-          OutputStream out = response.getOutputStream();
-          
-          httpClient = HttpClients.createDefault();
-          httpGet = new HttpGet(url);
-          httpResponse = null;
-          try {
-            httpResponse = httpClient.execute(httpGet);
-            HttpEntity entity = httpResponse.getEntity();
-            
-            // transfer headers over to the new stream, "Last-Modified" is particularly important
-            for (Header header : httpResponse.getAllHeaders()) {
-              response.setHeader( header.getName(), header.getValue() );
-            }
-            
-            if (entity != null) {
-               entity.writeTo( out );
-            } else {
-              logger.warn( "error loading " + url );
-            }
-          } catch (Exception e) {
-            logger.warn( "error loading " + url, e );
-          } finally {
-            try {
-              httpResponse.close();
-            } catch ( IOException e ) {
-              logger.warn( "can't close connection", e );
-            }
-          }
-          
-          out.close();                 
+          this.proxy( url, request, response );               
                   
         } catch (Exception e) {
           logger.error("error while parsing XML", e);
@@ -387,6 +340,37 @@ public class IvySnapshotServletFilter extends HttpServlet {
       }
 
     
+  }
+  
+  private void proxy(String proxyURL, HttpServletRequest request, HttpServletResponse response ) throws IOException {
+    OutputStream out = response.getOutputStream();
+    CloseableHttpClient httpClient = HttpClients.createDefault();
+    HttpGet httpGet = new HttpGet(proxyURL);
+    CloseableHttpResponse httpResponse = null;
+    try {
+      httpResponse = httpClient.execute(httpGet);
+      HttpEntity entity = httpResponse.getEntity();
+      
+      // transfer headers over to the new stream, "Last-Modified" is particularly important
+      for (Header header : httpResponse.getAllHeaders()) {
+        response.setHeader( header.getName(), header.getValue() );
+      }
+      
+      if (entity != null) {
+         entity.writeTo( out );
+      } else {
+        logger.warn( "error loading " + proxyURL );
+      }
+    } catch (Exception e) {
+      logger.warn( "error loading " + proxyURL, e );
+    } finally {
+      try {
+        httpResponse.close();
+      } catch ( IOException e ) {
+        logger.warn( "can't close connection", e );
+      }
+    }
+    out.close();
   }
 
 }
