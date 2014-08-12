@@ -50,6 +50,33 @@ public class IvySnapshotServletFilter extends HttpServlet {
   
 
   @Override
+  protected void doDelete( HttpServletRequest request, HttpServletResponse response ) throws ServletException, IOException {
+    logger.debug( "HTTP DELETE received ... redirecting ..." );
+    String url = request.getRequestURL().toString();
+    String path = url.substring( url.indexOf( "/", url.indexOf( "://" ) +3 ), url.length() );
+    response.sendRedirect( proxiedServerContext + path );
+  }
+
+
+  @Override
+  protected void doPost( HttpServletRequest request, HttpServletResponse response ) throws ServletException, IOException {
+    logger.debug( "HTTP POST received ... redirecting ..." );
+    String url = request.getRequestURL().toString();
+    String path = url.substring( url.indexOf( "/", url.indexOf( "://" ) +3 ), url.length() );
+    response.sendRedirect( proxiedServerContext + path );
+  }
+
+
+  @Override
+  protected void doPut( HttpServletRequest request, HttpServletResponse response ) throws ServletException, IOException {
+    logger.debug( "HTTP PUT received ... redirecting ..." );
+    String url = request.getRequestURL().toString();
+    String path = url.substring( url.indexOf( "/", url.indexOf( "://" ) +3 ), url.length() );
+    response.sendRedirect( proxiedServerContext + path );
+  }
+
+
+  @Override
   public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
       
    
