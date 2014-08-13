@@ -1,6 +1,7 @@
 package org.pentaho.engops;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.StringReader;
 import java.io.StringWriter;
@@ -23,8 +24,12 @@ import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPut;
+import org.apache.http.entity.InputStreamEntity;
+import org.apache.http.impl.auth.BasicScheme;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.params.HttpParams;
 import org.apache.http.util.EntityUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,30 +56,13 @@ public class IvySnapshotServletFilter extends HttpServlet {
   }
   
 
-  @Override
-  protected void doDelete( HttpServletRequest request, HttpServletResponse response ) throws ServletException, IOException {
-    logger.debug( "HTTP DELETE received ... proxying ..." );
-    String url = request.getRequestURL().toString();
-    String path = url.substring( url.indexOf( "/", url.indexOf( "://" ) +3 ), url.length() );
-    this.proxy( proxiedServerContext + path, request, response );
-  }
-
-
-  @Override
-  protected void doPost( HttpServletRequest request, HttpServletResponse response ) throws ServletException, IOException {
-    logger.debug( "HTTP POST received ... proxying ..." );
-    String url = request.getRequestURL().toString();
-    String path = url.substring( url.indexOf( "/", url.indexOf( "://" ) +3 ), url.length() );
-    this.proxy( proxiedServerContext + path, request, response );
-  }
-
 
   @Override
   protected void doPut( HttpServletRequest request, HttpServletResponse response ) throws ServletException, IOException {
     logger.debug( "HTTP PUT received ... proxying ..." );
     String url = request.getRequestURL().toString();
     String path = url.substring( url.indexOf( "/", url.indexOf( "://" ) +3 ), url.length() );
-    this.proxy( proxiedServerContext + path, request, response );
+    this.proxyUpload( proxiedServerContext + path, request, response );
   }
 
 
@@ -326,7 +314,7 @@ public class IvySnapshotServletFilter extends HttpServlet {
           }
                     
           url = proxiedServerContext + path + snapshotFile;
-          this.proxy( url, request, response );               
+          this.proxyDownload( url, request, response );               
                   
         } catch (Exception e) {
           logger.error("error while parsing XML", e);
@@ -342,7 +330,7 @@ public class IvySnapshotServletFilter extends HttpServlet {
     
   }
   
-  private void proxy(String proxyURL, HttpServletRequest request, HttpServletResponse response ) throws IOException {
+  private void proxyDownload(String proxyURL, HttpServletRequest request, HttpServletResponse response ) throws IOException {
     OutputStream out = response.getOutputStream();
     CloseableHttpClient httpClient = HttpClients.createDefault();
     HttpGet httpGet = new HttpGet(proxyURL);
@@ -352,6 +340,42 @@ public class IvySnapshotServletFilter extends HttpServlet {
       HttpEntity entity = httpResponse.getEntity();
       
       // transfer headers over to the new stream, "Last-Modified" is particularly important
+      for (Header header : httpResponse.getAllHeaders()) {
+        response.setHeader( header.getName(), header.getValue() );
+      }
+      
+      if (entity != null) {
+         entity.writeTo( out );
+      } else {
+        logger.warn( "error loading " + proxyURL );
+      }
+    } catch (Exception e) {
+      logger.warn( "error loading " + proxyURL, e );
+    } finally {
+      try {
+        httpResponse.close();
+      } catch ( IOException e ) {
+        logger.warn( "can't close connection", e );
+      }
+    }
+    out.close();
+  }
+  
+  private void proxyUpload(String proxyURL, HttpServletRequest request, HttpServletResponse response ) throws IOException {
+    OutputStream out = response.getOutputStream();
+    CloseableHttpClient httpClient = HttpClients.createDefault();
+    HttpPut httpPut = new HttpPut(proxyURL);
+    CloseableHttpResponse httpResponse = null;
+    try {
+      InputStream requestInputStream = request.getInputStream();
+      InputStreamEntity requestInputStreamEntity = new InputStreamEntity(requestInputStream);
+      httpPut.setEntity( requestInputStreamEntity );
+      
+      httpPut.setHeader( "Authentication", request.getHeader( "Authentication" ) );
+
+      httpResponse = httpClient.execute(httpPut);
+      HttpEntity entity = httpResponse.getEntity();
+      
       for (Header header : httpResponse.getAllHeaders()) {
         response.setHeader( header.getName(), header.getValue() );
       }
