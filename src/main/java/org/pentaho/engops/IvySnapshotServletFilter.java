@@ -317,14 +317,14 @@ public class IvySnapshotServletFilter extends HttpServlet {
           this.proxyDownload( url, request, response );               
                   
         } catch (Exception e) {
-          logger.error("error while parsing XML", e);
-          response.sendRedirect( proxiedServerContext + path + filename );
+          logger.error("error while parsing XML, attempting a direct proxy", e);
+          this.proxyDownload( proxiedServerContext + path + filename, request, response );
           return;
         }
         
       } else {
-        logger.debug( "redirecting request to: " + proxiedServerContext + path + filename );
-        response.sendRedirect( proxiedServerContext + path + filename );
+        logger.debug( "no pattern match, attempting a direct proxy of " + proxiedServerContext + path + filename );
+        this.proxyDownload( proxiedServerContext + path + filename, request, response );
       }
 
     
@@ -336,10 +336,12 @@ public class IvySnapshotServletFilter extends HttpServlet {
     HttpGet httpGet = new HttpGet(proxyURL);
     CloseableHttpResponse httpResponse = null;
     try {
+      
+      httpGet.setHeader( "Authentication", request.getHeader( "Authentication" ) );
+      
       httpResponse = httpClient.execute(httpGet);
       HttpEntity entity = httpResponse.getEntity();
       
-      // transfer headers over to the new stream, "Last-Modified" is particularly important
       for (Header header : httpResponse.getAllHeaders()) {
         response.setHeader( header.getName(), header.getValue() );
       }
