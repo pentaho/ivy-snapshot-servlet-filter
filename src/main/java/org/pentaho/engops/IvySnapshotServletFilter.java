@@ -22,6 +22,7 @@ import javax.xml.transform.stream.StreamResult;
 
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
+import org.apache.http.HttpStatus;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPut;
@@ -46,6 +47,7 @@ public class IvySnapshotServletFilter extends HttpServlet {
   private static Logger logger = LoggerFactory.getLogger( IvySnapshotServletFilter.class );
 
   public static String proxiedServerContext;
+  public static String contextName = "";
   
   static {
     proxiedServerContext = System.getProperty( "proxiedServerContext" );
@@ -53,18 +55,58 @@ public class IvySnapshotServletFilter extends HttpServlet {
       System.out.println("specify the proxied repo as (e.g.) -DproxiedServerContext=http://nexus.pentaho.org:8080/nexus");
       System.exit( 1 );
     }
+    if ( proxiedServerContext.indexOf("/", proxiedServerContext.indexOf( "://"  ) + 3 ) > 0 ) {
+      contextName = proxiedServerContext.substring( proxiedServerContext.indexOf("/", proxiedServerContext.indexOf( "://"  ) + 3 ), proxiedServerContext.length() );
+      logger.debug("proxying to context name: " + contextName);
+    }
   }
   
 
+  
+  /*
+  @Override
+  protected void doDelete( HttpServletRequest req, HttpServletResponse resp ) throws ServletException, IOException {
+    logger.warn( "DELETE called with: " + req.getRequestURL().toString() );
+    super.doDelete( req, resp );
+  }
+
+
+  @Override
+  protected void doHead( HttpServletRequest req, HttpServletResponse resp ) throws ServletException, IOException {
+    logger.warn( "HEAD called with: " + req.getRequestURL().toString() );
+    super.doHead( req, resp );
+  }
+
+
+  @Override
+  protected void doOptions( HttpServletRequest req, HttpServletResponse resp ) throws ServletException, IOException {
+    logger.warn( "OPTIONS called with: " + req.getRequestURL().toString() );
+    super.doOptions( req, resp );
+  }
+
+
+  @Override
+  protected void doPost( HttpServletRequest req, HttpServletResponse resp ) throws ServletException, IOException {
+    logger.warn( "POST called with: " + req.getRequestURL().toString() );
+    super.doPost( req, resp );
+  }
+
+
+  @Override
+  protected void doTrace( HttpServletRequest req, HttpServletResponse resp ) throws ServletException, IOException {
+    logger.warn( "TRACE called with: " + req.getRequestURL().toString() );
+    super.doTrace( req, resp );
+  }
+  */
 
   @Override
   protected void doPut( HttpServletRequest request, HttpServletResponse response ) throws ServletException, IOException {
-    logger.debug( "HTTP PUT received ... proxying ..." );
+    logger.debug( "HTTP PUT received ... proxying upload ..." );
     String url = request.getRequestURL().toString();
     String path = url.substring( url.indexOf( "/", url.indexOf( "://" ) +3 ), url.length() );
     this.proxyUpload( proxiedServerContext + path, request, response );
   }
-
+  
 
   @Override
   public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -75,6 +117,11 @@ public class IvySnapshotServletFilter extends HttpServlet {
       
       String path = url.substring( url.indexOf( "/", url.indexOf( "://" ) +3 ), url.lastIndexOf( "/" ) + 1 );
       //logger.debug( "path: " + path );
+      
+      // JavaScript server callbacks to load content will often have the target context in the request
+      while ( path.startsWith( contextName  ) && contextName.length() > 2 ) {
+        path = path.substring( contextName.length(), path.length() );
+      }
 
       String filename = url.substring(url.lastIndexOf( "/" ) + 1,url.length());
       //logger.debug( "filename: " + filename);
@@ -337,15 +384,39 @@ public class IvySnapshotServletFilter extends HttpServlet {
     CloseableHttpResponse httpResponse = null;
     try {
       
-      httpGet.setHeader( "Authentication", request.getHeader( "Authentication" ) );
-      
+      Enumeration<String> headerNames = request.getHeaderNames();
+      while ( headerNames.hasMoreElements() ) {
+        String headerName = headerNames.nextElement();
+        if ( !(headerName.equals("If-Match") || headerName.equals("If-Modified-Since") ) ) {
+          String headerValue = request.getHeader( headerName );
+          httpGet.setHeader( headerName, headerValue );
+        }
+      }
+
       httpResponse = httpClient.execute(httpGet);
+      
+      if ( httpResponse.getStatusLine().getStatusCode() != HttpStatus.SC_OK ) {
+        String message = httpResponse.getStatusLine().getStatusCode() + " : " + httpResponse.getStatusLine().getReasonPhrase() + " downloading " + request.getRequestURL().toString();
+        logger.error( message );
+        throw new RuntimeException( message );
+      }
+      
       HttpEntity entity = httpResponse.getEntity();
       
       for (Header header : httpResponse.getAllHeaders()) {
-        response.setHeader( header.getName(), header.getValue() );
+        if ( header.getName().equals( "Set-Cookie" ) ) {
+          String cookieValue = header.getValue();
+          if ( cookieValue.contains( "Path" ) ) {
+            String existingPath = cookieValue.substring( cookieValue.indexOf( "Path=" ) + 5, cookieValue.indexOf( ";", cookieValue.indexOf( "Path=" ) + 6 ) );
+            logger.debug( "cookie Path: " + existingPath );
+            cookieValue = cookieValue.replace( existingPath, "/" );
+          }
+          response.setHeader( "Set-Cookie", cookieValue );
+        } else {
+          response.setHeader( header.getName(), header.getValue() );
+        }
       }
-      
+            
       if (entity != null) {
          entity.writeTo( out );
       } else {
@@ -364,6 +435,7 @@ public class IvySnapshotServletFilter extends HttpServlet {
   }
   
   private void proxyUpload(String proxyURL, HttpServletRequest request, HttpServletResponse response ) throws IOException {
+    logger.debug( "uploading " + proxyURL );
     OutputStream out = response.getOutputStream();
     CloseableHttpClient httpClient = HttpClients.createDefault();
     HttpPut httpPut = new HttpPut(proxyURL);
@@ -372,10 +444,29 @@ public class IvySnapshotServletFilter extends HttpServlet {
       InputStream requestInputStream = request.getInputStream();
       InputStreamEntity requestInputStreamEntity = new InputStreamEntity(requestInputStream);
       httpPut.setEntity( requestInputStreamEntity );
+        
+      /*
+      Enumeration<String> headerNames = request.getHeaderNames();
+      while (headerNames.hasMoreElements()) {
+        String headerName = headerNames.nextElement();
+        String headerValue = request.getHeader( headerName );
+        httpPut.setHeader( headerName, headerValue );
+        logger.debug( headerName + " : " + headerValue );
+      }
+      */
       
-      httpPut.setHeader( "Authentication", request.getHeader( "Authentication" ) );
+      if ( request.getHeader( "Authorization" ) != null ) {
+        httpPut.setHeader( "Authorization", request.getHeader( "Authorization" ) );
+      }
 
       httpResponse = httpClient.execute(httpPut);
+      
+      if ( httpResponse.getStatusLine().getStatusCode() != HttpStatus.SC_OK ) {
+        String message = httpResponse.getStatusLine().getStatusCode() + " : " + httpResponse.getStatusLine().getReasonPhrase() + " uploading " + proxyURL;
+        logger.error( message );
+        throw new RuntimeException( message );
+      }
+      
       HttpEntity entity = httpResponse.getEntity();
       
       for (Header header : httpResponse.getAllHeaders()) {
@@ -385,10 +476,10 @@ public class IvySnapshotServletFilter extends HttpServlet {
       if (entity != null) {
          entity.writeTo( out );
       } else {
-        logger.warn( "error loading " + proxyURL );
+        logger.warn( "error uploading " + proxyURL );
       }
     } catch (Exception e) {
-      logger.warn( "error loading " + proxyURL, e );
+      logger.warn( "error uploading " + proxyURL, e );
     } finally {
       try {
         httpResponse.close();
