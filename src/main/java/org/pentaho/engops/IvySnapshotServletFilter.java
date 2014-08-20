@@ -62,51 +62,6 @@ public class IvySnapshotServletFilter extends HttpServlet {
   }
   
 
-  
-  /*
-  @Override
-  protected void doDelete( HttpServletRequest req, HttpServletResponse resp ) throws ServletException, IOException {
-    logger.warn( "DELETE called with: " + req.getRequestURL().toString() );
-    super.doDelete( req, resp );
-  }
-
-
-  @Override
-  protected void doHead( HttpServletRequest req, HttpServletResponse resp ) throws ServletException, IOException {
-    logger.warn( "HEAD called with: " + req.getRequestURL().toString() );
-    super.doHead( req, resp );
-  }
-
-
-  @Override
-  protected void doOptions( HttpServletRequest req, HttpServletResponse resp ) throws ServletException, IOException {
-    logger.warn( "OPTIONS called with: " + req.getRequestURL().toString() );
-    super.doOptions( req, resp );
-  }
-
-
-  @Override
-  protected void doPost( HttpServletRequest req, HttpServletResponse resp ) throws ServletException, IOException {
-    logger.warn( "POST called with: " + req.getRequestURL().toString() );
-    super.doPost( req, resp );
-  }
-
-
-  @Override
-  protected void doTrace( HttpServletRequest req, HttpServletResponse resp ) throws ServletException, IOException {
-    logger.warn( "TRACE called with: " + req.getRequestURL().toString() );
-    super.doTrace( req, resp );
-  }
-  */
-
-  @Override
-  protected void doPut( HttpServletRequest request, HttpServletResponse response ) throws ServletException, IOException {
-    logger.debug( "HTTP PUT received ... proxying upload ..." );
-    String url = request.getRequestURL().toString();
-    String path = url.substring( url.indexOf( "/", url.indexOf( "://" ) +3 ), url.length() );
-    this.proxyUpload( proxiedServerContext + path, request, response );
-  }
-  
 
   @Override
   public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
@@ -434,60 +389,5 @@ public class IvySnapshotServletFilter extends HttpServlet {
     out.close();
   }
   
-  private void proxyUpload(String proxyURL, HttpServletRequest request, HttpServletResponse response ) throws IOException {
-    logger.debug( "uploading " + proxyURL );
-    OutputStream out = response.getOutputStream();
-    CloseableHttpClient httpClient = HttpClients.createDefault();
-    HttpPut httpPut = new HttpPut(proxyURL);
-    CloseableHttpResponse httpResponse = null;
-    try {
-      InputStream requestInputStream = request.getInputStream();
-      InputStreamEntity requestInputStreamEntity = new InputStreamEntity(requestInputStream);
-      httpPut.setEntity( requestInputStreamEntity );
-        
-      /*
-      Enumeration<String> headerNames = request.getHeaderNames();
-      while (headerNames.hasMoreElements()) {
-        String headerName = headerNames.nextElement();
-        String headerValue = request.getHeader( headerName );
-        httpPut.setHeader( headerName, headerValue );
-        logger.debug( headerName + " : " + headerValue );
-      }
-      */
-      
-      if ( request.getHeader( "Authorization" ) != null ) {
-        httpPut.setHeader( "Authorization", request.getHeader( "Authorization" ) );
-      }
-
-      httpResponse = httpClient.execute(httpPut);
-      
-      if ( httpResponse.getStatusLine().getStatusCode() != HttpStatus.SC_OK ) {
-        String message = httpResponse.getStatusLine().getStatusCode() + " : " + httpResponse.getStatusLine().getReasonPhrase() + " uploading " + proxyURL;
-        logger.error( message );
-        throw new RuntimeException( message );
-      }
-      
-      HttpEntity entity = httpResponse.getEntity();
-      
-      for (Header header : httpResponse.getAllHeaders()) {
-        response.setHeader( header.getName(), header.getValue() );
-      }
-      
-      if (entity != null) {
-         entity.writeTo( out );
-      } else {
-        logger.warn( "error uploading " + proxyURL );
-      }
-    } catch (Exception e) {
-      logger.warn( "error uploading " + proxyURL, e );
-    } finally {
-      try {
-        httpResponse.close();
-      } catch ( IOException e ) {
-        logger.warn( "can't close connection", e );
-      }
-    }
-    out.close();
-  }
-
+  
 }
