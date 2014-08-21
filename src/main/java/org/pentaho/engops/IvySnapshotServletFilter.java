@@ -325,7 +325,7 @@ public class IvySnapshotServletFilter extends HttpServlet {
         }
         
       } else {
-        logger.debug( "no pattern match, attempting a direct proxy of " + proxiedServerContext + path + filename );
+        logger.info( "proxying " + proxiedServerContext + path + filename );
         this.proxyDownload( proxiedServerContext + path + filename, request, response );
       }
 
@@ -352,8 +352,7 @@ public class IvySnapshotServletFilter extends HttpServlet {
       
       if ( httpResponse.getStatusLine().getStatusCode() != HttpStatus.SC_OK ) {
         String message = httpResponse.getStatusLine().getStatusCode() + " : " + httpResponse.getStatusLine().getReasonPhrase() + " downloading " + request.getRequestURL().toString();
-        logger.error( message );
-        throw new RuntimeException( message );
+        logger.warn( message );
       }
       
       HttpEntity entity = httpResponse.getEntity();
@@ -363,7 +362,6 @@ public class IvySnapshotServletFilter extends HttpServlet {
           String cookieValue = header.getValue();
           if ( cookieValue.contains( "Path" ) ) {
             String existingPath = cookieValue.substring( cookieValue.indexOf( "Path=" ) + 5, cookieValue.indexOf( ";", cookieValue.indexOf( "Path=" ) + 6 ) );
-            logger.debug( "cookie Path: " + existingPath );
             cookieValue = cookieValue.replace( existingPath, "/" );
           }
           response.setHeader( "Set-Cookie", cookieValue );
@@ -371,7 +369,9 @@ public class IvySnapshotServletFilter extends HttpServlet {
           response.setHeader( header.getName(), header.getValue() );
         }
       }
-            
+      
+      response.setStatus( httpResponse.getStatusLine().getStatusCode() );
+      
       if (entity != null) {
          entity.writeTo( out );
       } else {
