@@ -9,12 +9,13 @@ timestamped file.
 This project creates a war for deployment to a web container.  Placement of the war in a Jetty server will deploy to the
 root context.
 
-Modify the bin/jetty.sh file of a Jetty installation to define a proxiedServerContext system property that points to the
-web application context url of the repo you want to proxy.  For instance, if you are running a Nexus instance on the root
-context of nexus.pentaho.org on port 8081, you should add the following JAVA_OPTIONS line prior to the "start" definition
+Modify the bin/jetty.sh file of a Jetty installation to define a proxiedURL system property that points to the
+web application context url of the repo you want to proxy.  You should also define a redirectURL system property
+that points to the repo you are working with itself.  For instance, if you are running a Nexus instance on the root
+context of ROOT on localhost:8081, you should add the following JAVA_OPTIONS line prior to the "start" definition
 
 ```
-JAVA_OPTIONS+=("-DproxiedServerContext=http://nexus.pentaho.org:8081")
+JAVA_OPTIONS+=("-DproxiedURL=http://localhost:8081" "-DredirectURL=http://nexus.pentaho.org")
 ```
 
 It is also expected that your url resolver in your ivysettings.xml will contain checkmodified="true" and

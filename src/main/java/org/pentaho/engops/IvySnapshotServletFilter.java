@@ -48,12 +48,18 @@ public class IvySnapshotServletFilter extends HttpServlet {
 
   public static String proxiedServerContext;
   public static String contextName = "";
+  public static String redirectURL = "";
+
   
   static {
-    proxiedServerContext = System.getProperty( "proxiedServerContext" );
+    proxiedServerContext = System.getProperty( "proxiedURL" );
     if (proxiedServerContext == null) {
-      System.out.println("specify the proxied repo as (e.g.) -DproxiedServerContext=http://nexus.pentaho.org:8080/nexus");
+      System.out.println("specify the proxied repo as (e.g.) -DproxiedURL=http://localhost:8081");
       System.exit( 1 );
+    }
+    if (System.getProperty( "redirectURL" ) != null) {
+      redirectURL = System.getProperty( "redirectURL" );
+      logger.debug( "redirect URL: " + redirectURL );
     }
     if ( proxiedServerContext.indexOf("/", proxiedServerContext.indexOf( "://"  ) + 3 ) > 0 ) {
       contextName = proxiedServerContext.substring( proxiedServerContext.indexOf("/", proxiedServerContext.indexOf( "://"  ) + 3 ), proxiedServerContext.length() );
@@ -319,14 +325,27 @@ public class IvySnapshotServletFilter extends HttpServlet {
           this.proxyDownload( url, request, response );               
                   
         } catch (Exception e) {
-          logger.error("error while parsing XML, attempting a direct proxy", e);
-          this.proxyDownload( proxiedServerContext + path + filename, request, response );
+          logger.error("error while parsing XML", e);
+          if ( redirectURL.length() > 1 ) {
+            logger.info( "redirecting to " + redirectURL + path + filename );
+            response.sendRedirect( redirectURL + path + filename );
+          } else {
+            logger.info( "proxying " + proxiedServerContext + path + filename );
+            this.proxyDownload( proxiedServerContext + path + filename, request, response );
+          }
           return;
         }
         
       } else {
-        logger.info( "proxying " + proxiedServerContext + path + filename );
-        this.proxyDownload( proxiedServerContext + path + filename, request, response );
+        
+        if ( redirectURL.length() > 1 ) {
+          logger.info( "redirecting to " + redirectURL + path + filename );
+          response.sendRedirect( redirectURL + path + filename );
+        } else {
+          logger.info( "proxying " + proxiedServerContext + path + filename );
+          this.proxyDownload( proxiedServerContext + path + filename, request, response );
+        }
+        
       }
 
     
