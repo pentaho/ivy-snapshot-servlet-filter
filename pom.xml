@@ -9,7 +9,7 @@
   <parent>
     <groupId>org.pentaho</groupId>
     <artifactId>pentaho-ce-jar-parent-pom</artifactId>
-    <version>RELEASE</version>
+    <version>1.1.9</version>
   </parent>
   
   <name>Pentaho Community Edition Project: ivy-snapshot-servlet-filter</name>
@@ -36,7 +36,7 @@
 
 
   <properties>
-    <github.user>buildguy</github.user>
+    <github.user>pentaho</github.user>
   </properties>
 
   <scm>
@@ -66,8 +66,6 @@
   </build>
     
   <dependencies>
-  
-    <!-- 'COMPILE' SCOPED DEPS -->
 
     <dependency>
       <groupId>org.apache.httpcomponents</groupId>
@@ -75,26 +73,20 @@
       <version>4.3.3</version>
       <scope>compile</scope>
     </dependency>
-    
-    <!-- 'RUNTIME' SCOPED DEPS -->
-    
-    
-    <!-- 'PROVIDED' SCOPED DEPS -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>1.7.6</version>
+      <scope>compile</scope>
+    </dependency>
+
     <dependency>
       <groupId>javax.servlet</groupId>
       <artifactId>javax.servlet-api</artifactId>
       <version>3.0.1</version>
       <scope>provided</scope>
     </dependency>
-    <dependency>
-      <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-api</artifactId>
-      <version>1.7.6</version>
-      <scope>provided</scope>
-    </dependency>
 
-    <!-- 'TEST' SCOPED DEPS -->
-  
   </dependencies>
   
 

@@ -1,14 +1,16 @@
 package org.pentaho.engops;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.StringReader;
 import java.io.StringWriter;
+import java.lang.reflect.Array;
 import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Set;
 
 import javax.servlet.ServletException;
-import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -25,12 +27,8 @@ import org.apache.http.HttpEntity;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpPut;
-import org.apache.http.entity.InputStreamEntity;
-import org.apache.http.impl.auth.BasicScheme;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
-import org.apache.http.params.HttpParams;
 import org.apache.http.util.EntityUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,21 +47,54 @@ public class IvySnapshotServletFilter extends HttpServlet {
   public static String proxiedServerContext;
   public static String contextName = "";
   public static String redirectURL = "";
-
+  public static String urlSearchString = "";
+  public static String urlReplaceString = "";
+  public static boolean performReplacement = false;
+  public static HashMap<String,String> replacementMap = new HashMap<>();
   
   static {
     proxiedServerContext = System.getProperty( "proxiedURL" );
+    redirectURL = System.getProperty( "redirectURL" );
+    // required property
     if (proxiedServerContext == null) {
-      System.out.println("specify the proxied repo as (e.g.) -DproxiedURL=http://localhost:8081");
+      System.out.println("specify the proxied repo to pull artifacts from as (e.g.) -DproxiedURL=http://localhost:8081");
       System.exit( 1 );
     }
-    if (System.getProperty( "redirectURL" ) != null) {
-      redirectURL = System.getProperty( "redirectURL" );
-      logger.debug( "redirect URL: " + redirectURL );
+    // required property
+    if (redirectURL == null) {
+      System.out.println("specify the URL to redirect the client to as (e.g.) -DredirectURL=http://nexus.pentaho.org");
+      System.exit( 1 );
     }
+    
+    logger.debug( "proxiedURL: " + proxiedServerContext );
+    logger.debug( "redirectURL: " + redirectURL );
+    
     if ( proxiedServerContext.indexOf("/", proxiedServerContext.indexOf( "://"  ) + 3 ) > 0 ) {
       contextName = proxiedServerContext.substring( proxiedServerContext.indexOf("/", proxiedServerContext.indexOf( "://"  ) + 3 ), proxiedServerContext.length() );
       logger.debug("proxying to context name: " + contextName);
+    }
+    
+    // optional properties
+    urlSearchString = System.getProperty( "urlSearchString" );
+    urlReplaceString = System.getProperty( "urlReplaceString" );
+    if (urlSearchString != null && urlReplaceString != null) {
+      performReplacement = true;
+      String[] searchTokens = new String[1];
+      String[] replaceTokens = new String[1];;
+      if (urlSearchString.contains( "," )) {
+        searchTokens = urlSearchString.split( "," );
+      } else {
+        searchTokens[0] = urlSearchString;
+      }
+      if (urlReplaceString.contains( "," )) {
+        replaceTokens = urlReplaceString.split( "," );
+      } else {
+        replaceTokens[0] = urlReplaceString;
+      }
+      for (int i=0; i < Array.getLength( searchTokens ); i++) {
+        replacementMap.put( searchTokens[i], replaceTokens[i] );
+      }
+      
     }
   }
   
@@ -77,12 +108,23 @@ public class IvySnapshotServletFilter extends HttpServlet {
       logger.debug( "requested url: " + url );
       
       String path = url.substring( url.indexOf( "/", url.indexOf( "://" ) +3 ), url.lastIndexOf( "/" ) + 1 );
-      //logger.debug( "path: " + path );
+      logger.debug( "path: " + path );
       
       // JavaScript server callbacks to load content will often have the target context in the request
       while ( path.startsWith( contextName  ) && contextName.length() > 2 ) {
         path = path.substring( contextName.length(), path.length() );
       }
+      
+      if (performReplacement) {
+        Set<String> searchStrings = replacementMap.keySet();
+        Iterator<String> searchStringsIterator = searchStrings.iterator();
+        while (searchStringsIterator.hasNext()) {
+          String searchString = searchStringsIterator.next();
+          path = path.replace(searchString, replacementMap.get( searchString ) );
+        }
+        logger.debug( "new path: " + path );
+      }
+      
 
       String filename = url.substring(url.lastIndexOf( "/" ) + 1,url.length());
       //logger.debug( "filename: " + filename);

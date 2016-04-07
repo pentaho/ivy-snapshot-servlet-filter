@@ -9,9 +9,8 @@
   
   <dependencies defaultconf="default->default">
     
-    <dependency org="pentaho" name="pentaho-cdf" rev="5.2-LARRY-SNAPSHOT" changing="true" transitive="false" conf="default->default">
-      <artifact name="pentaho-cdf" type="zip"/>
-      <artifact name="pentaho-cdf" type="jar" />
+    <dependency org="pentaho" name="pentaho-registry" rev="7.0-SNAPSHOT" changing="true" transitive="false" conf="default->default">
+      <artifact name="pentaho-registry" type="jar" />
     </dependency>
     
   </dependencies>
