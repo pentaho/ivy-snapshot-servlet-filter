@@ -208,7 +208,7 @@ public class IvySnapshotServletFilter implements Filter {
           }
         }
         logger.debug( "examining node with extension " + extension );
-        if ( extension.equals(mavenGAV.getExtension()) ) {
+        if ( mavenGAV.getExtension().startsWith(extension) ) {  // we use startsWith to match requests for hashes (.md5, .sha, etc)
           logger.debug( extension + " matches artifact extension of " + mavenGAV.getExtension() );
           
           String value = "";
