@@ -1,4 +1,4 @@
-package org.pentaho.engops;
+package org.pentaho.engops.nexus.plugin.ivysnapshot;
 
 import javax.inject.Named;
 

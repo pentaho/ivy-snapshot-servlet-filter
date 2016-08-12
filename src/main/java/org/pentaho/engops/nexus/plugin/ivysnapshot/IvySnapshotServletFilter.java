@@ -1,4 +1,4 @@
-package org.pentaho.engops;
+package org.pentaho.engops.nexus.plugin.ivysnapshot;
 
 import java.io.IOException;
 import java.io.StringReader;
@@ -58,7 +58,7 @@ public class IvySnapshotServletFilter implements Filter {
       HttpServletRequest httpRequest = (HttpServletRequest) request;
       String requestURL = httpRequest.getRequestURL().toString();
       if ( requestURL.contains( "-SNAPSHOT-" ) || requestURL.contains( "-SNAPSHOT." ) ) {
-        logger.info( "    REQUESTED: " + httpRequest.getRequestURL().toString() );
+        logger.info( "    REQUESTED: " + httpRequest.getRequestURL().toString() + " from " + httpRequest.getRemoteAddr() );
         String latestSnapshotFilePath = getLatestSnapshotFilePath( requestURL );
         logger.info( "FORWARDING TO: " + latestSnapshotFilePath);
         
@@ -100,6 +100,11 @@ public class IvySnapshotServletFilter implements Filter {
     logger.debug( "extension: " + mavenGAV.getExtension() );
     
     String latestSnapshotVersion = this.getLatestSnapshotVersion( metadataDomDocument, mavenGAV );
+    
+    if ( latestSnapshotVersion.length() > 0 ) {
+      logger.warn( "SNAPSHOT version of " + mavenGAV.getGroupId() + ":" + mavenGAV.getArtifactId() + ":" + mavenGAV.getClassifier() + ":" + mavenGAV.getExtension() + " not found" );
+    }
+    
     String latestSnapshotFilePath = path + mavenGAV.getArtifactId() + "-" + latestSnapshotVersion + "." + mavenGAV.getExtension();
     if ( mavenGAV.getClassifier().length() > 0 ) {
       latestSnapshotFilePath = path + mavenGAV.getArtifactId() + "-" + latestSnapshotVersion + "-" + mavenGAV.getClassifier() + "." + mavenGAV.getExtension();
@@ -113,7 +118,7 @@ public class IvySnapshotServletFilter implements Filter {
   private String getMavenMetadataXml( String protocol, String serverPort, String context, String path) {
     
     String mavenMetadataURL = protocol + "://" + serverPort + context + path + "maven-metadata.xml";
-    logger.info( "getting metadata file: " + mavenMetadataURL );
+    logger.debug( "getting metadata file: " + mavenMetadataURL );
     
     String metadataXml = "";
     CloseableHttpClient httpClient = HttpClients.createDefault();

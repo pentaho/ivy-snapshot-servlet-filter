@@ -1,4 +1,4 @@
-package org.pentaho.engops;
+package org.pentaho.engops.nexus.plugin.ivysnapshot;
 
 public class MavenGAV {
   

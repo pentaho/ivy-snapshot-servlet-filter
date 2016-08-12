@@ -5,7 +5,7 @@
   <!-- 
   WARNING!  This plugin will ONLY build with Maven version 3.0.5!
   
-  usage of maven-release-plugin requires -Dbuildsupport-staging.skip
+  usage of maven-release-plugin requires -Darguments="-Dbuildsupport-staging.skip"
    -->
   <parent>
     <groupId>org.sonatype.nexus.plugins</groupId>
