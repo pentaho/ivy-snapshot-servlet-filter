@@ -59,14 +59,18 @@ public class IvySnapshotServletFilter implements Filter {
       String requestURL = httpRequest.getRequestURL().toString();
       if ( requestURL.contains( "-SNAPSHOT-" ) || requestURL.contains( "-SNAPSHOT." ) ) {
         logger.info( "    REQUESTED: " + httpRequest.getRequestURL().toString() + " from " + httpRequest.getRemoteAddr() );
-        String latestSnapshotFilePath = getLatestSnapshotFilePath( requestURL );
-        logger.info( "FORWARDING TO: " + latestSnapshotFilePath);
-        
-        /*
-         * ensure you add <dispatcher>FORWARD</dispatcher> to the Nexus web.xml GuiceFilter or this won't work ...
-         */
-        request.getRequestDispatcher( latestSnapshotFilePath ).forward( httpRequest, (HttpServletResponse) response );
-        return;
+        try {
+          String latestSnapshotFilePath = getLatestSnapshotFilePath( requestURL );
+          logger.info( "FORWARDING TO: " + latestSnapshotFilePath);
+          
+          /*
+           * ensure you add <dispatcher>FORWARD</dispatcher> to the Nexus web.xml GuiceFilter or this won't work ...
+           */
+          request.getRequestDispatcher( latestSnapshotFilePath ).forward( httpRequest, (HttpServletResponse) response );
+          return;
+        } catch ( SnapshotNotFoundException e ) {
+          logger.warn( e.getMessage() );
+        }
       }
     }
     chain.doFilter( request, response );
@@ -77,7 +81,7 @@ public class IvySnapshotServletFilter implements Filter {
   
   
   
-  private String getLatestSnapshotFilePath ( String requestURL ) {
+  private String getLatestSnapshotFilePath ( String requestURL ) throws SnapshotNotFoundException {
     String protocol = requestURL.substring( 0, requestURL.indexOf( ":" ) );
     logger.debug( "protocol: " + protocol );
     String serverPort = requestURL.substring( requestURL.indexOf( "://" ) + 3, requestURL.indexOf( "/", requestURL.indexOf( "://" ) +3 ) );
@@ -101,8 +105,8 @@ public class IvySnapshotServletFilter implements Filter {
     
     String latestSnapshotVersion = this.getLatestSnapshotVersion( metadataDomDocument, mavenGAV );
     
-    if ( latestSnapshotVersion.length() > 0 ) {
-      logger.warn( "SNAPSHOT version of " + mavenGAV.getGroupId() + ":" + mavenGAV.getArtifactId() + ":" + mavenGAV.getClassifier() + ":" + mavenGAV.getExtension() + " not found" );
+    if ( latestSnapshotVersion.length() == 0 ) {
+      throw new SnapshotNotFoundException( "latest SNAPSHOT version of " + mavenGAV.getGroupId() + ":" + mavenGAV.getArtifactId() + ":" + mavenGAV.getClassifier() + ":" + mavenGAV.getExtension() + " not found" );
     }
     
     String latestSnapshotFilePath = path + mavenGAV.getArtifactId() + "-" + latestSnapshotVersion + "." + mavenGAV.getExtension();
