@@ -92,10 +92,22 @@ public class IvySnapshotServletFilter implements Filter {
     String fileName = requestURL.substring( requestURL.lastIndexOf( "/" ) + 1 );
     logger.debug( "fileName: " + fileName );
 
-    String metadataXml = this.getMavenMetadataXml( protocol, serverPort, context, path );
+    String metadataXml = "";
+    try {
+      metadataXml = this.getMavenMetadataXml( protocol, serverPort, context, path );
+    } catch ( MavenMetadataNotFoundException e ) {
+      logger.warn( e.getMessage() );
+      throw new SnapshotNotFoundException( e.getMessage(), e );
+    }
     logger.debug( "metadata: " + metadataXml );
 
-    Document metadataDomDocument = this.getMetadataDomDocument( metadataXml );
+    Document metadataDomDocument = null;
+    try {
+      metadataDomDocument = this.getMetadataDomDocument( metadataXml );
+    } catch ( MetadataNotParsableException e ) {
+      logger.warn( e.getMessage() );
+      throw new SnapshotNotFoundException( e.getMessage(), e );
+    }
     MavenGAV mavenGAV = this.getMavenGAV( metadataDomDocument, fileName );
     logger.debug( "groupId: " + mavenGAV.getGroupId() );
     logger.debug( "artifactId: " + mavenGAV.getArtifactId() );
@@ -119,7 +131,7 @@ public class IvySnapshotServletFilter implements Filter {
   
   
   
-  private String getMavenMetadataXml( String protocol, String serverPort, String context, String path) {
+  private String getMavenMetadataXml( String protocol, String serverPort, String context, String path) throws MavenMetadataNotFoundException {
     
     String mavenMetadataURL = protocol + "://" + serverPort + context + path + "maven-metadata.xml";
     logger.debug( "getting metadata file: " + mavenMetadataURL );
@@ -130,6 +142,9 @@ public class IvySnapshotServletFilter implements Filter {
     CloseableHttpResponse httpResponse = null;
     try {
       httpResponse = httpClient.execute(httpGet);
+      if ( httpResponse.getStatusLine().getStatusCode() != 200) {
+        throw new MavenMetadataNotFoundException( httpResponse.getStatusLine().getReasonPhrase() );
+      }
       HttpEntity entity = httpResponse.getEntity();
       if (entity != null) {
          metadataXml = EntityUtils.toString(entity);
@@ -150,7 +165,7 @@ public class IvySnapshotServletFilter implements Filter {
   
   
   
-  private Document getMetadataDomDocument( String metadataXml ) {
+  private Document getMetadataDomDocument( String metadataXml ) throws MetadataNotParsableException {
     Document metadataDocument = null;
     try {
       DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -158,7 +173,7 @@ public class IvySnapshotServletFilter implements Filter {
       InputSource metadataSource = new InputSource(new StringReader(metadataXml));
       metadataDocument = builder.parse(metadataSource);
     } catch (Exception e) {
-      logger.error("error while parsing XML", e);
+      throw new MetadataNotParsableException( "error while parsing XML", e );
     }
     return metadataDocument;
   }

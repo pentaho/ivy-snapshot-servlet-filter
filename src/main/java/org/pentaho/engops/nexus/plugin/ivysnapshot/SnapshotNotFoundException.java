@@ -6,5 +6,9 @@ public class SnapshotNotFoundException extends Exception {
   public SnapshotNotFoundException ( String message ) {
     super( message );
   }
+  
+  public SnapshotNotFoundException ( String message, Throwable cause ) {
+    super( message, cause );
+  }
 
 }
