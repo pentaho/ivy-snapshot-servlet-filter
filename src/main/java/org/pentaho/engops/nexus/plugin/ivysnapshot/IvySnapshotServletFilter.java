@@ -152,12 +152,12 @@ public class IvySnapshotServletFilter implements Filter {
         logger.warn( "error loading " + mavenMetadataURL );
       }
     } catch (Exception e) {
-      logger.warn( "error loading " + mavenMetadataURL, e );
+      logger.warn( "error loading " + mavenMetadataURL );
     } finally {
       try {
         httpResponse.close();
       } catch ( IOException e ) {
-        logger.warn( "can't close connection", e );
+        logger.warn( "can't close connection" );
       }
     }
     return metadataXml;
