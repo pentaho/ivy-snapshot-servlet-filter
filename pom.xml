@@ -5,7 +5,7 @@
   <!-- 
   WARNING!  This plugin will ONLY build with Maven version 3.0.5!
   
-  usage of maven-release-plugin requires -Darguments="-Dbuildsupport-staging.skip"
+  usage of maven-release-plugin requires -Darguments="-Dbuildsupport-staging.skip -Dgpg.skip=true"
    -->
   <parent>
     <groupId>org.sonatype.nexus.plugins</groupId>
@@ -15,7 +15,7 @@
   
   <groupId>org.pentaho.engops</groupId>
   <artifactId>ivy-snapshot-nexus-plugin</artifactId>
-  <version>2.0.4-SNAPSHOT</version>
+  <version>2.0.5-SNAPSHOT</version>
   <packaging>nexus-plugin</packaging>
   
   <licenses>
