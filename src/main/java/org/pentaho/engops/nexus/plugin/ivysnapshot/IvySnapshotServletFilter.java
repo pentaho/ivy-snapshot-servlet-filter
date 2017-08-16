@@ -88,6 +88,7 @@ public class IvySnapshotServletFilter implements Filter {
     logger.debug( "serverPort: " + serverPort );
     logger.debug( "context: " + context );
     String path = requestURL.substring( (protocol + "://" + serverPort + context ).length(), requestURL.lastIndexOf( "/" ) + 1 );
+    path = path.replace(".", "/");
     logger.debug( "path:    " + path );
     String fileName = requestURL.substring( requestURL.lastIndexOf( "/" ) + 1 );
     logger.debug( "fileName: " + fileName );
