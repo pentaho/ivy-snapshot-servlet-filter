@@ -88,7 +88,15 @@ public class IvySnapshotServletFilter implements Filter {
     logger.debug( "serverPort: " + serverPort );
     logger.debug( "context: " + context );
     String path = requestURL.substring( (protocol + "://" + serverPort + context ).length(), requestURL.lastIndexOf( "/" ) + 1 );
-    path = path.replace(".", "/");
+    String topGroupIdLevel = path.substring( 1, path.indexOf( "/", 1 ) );
+    if ( topGroupIdLevel.contains(".") ) {
+      logger.debug( "requested path contains an Ivy group: " + topGroupIdLevel );
+      StringBuilder stringBuilder = new StringBuilder( path );
+      topGroupIdLevel = topGroupIdLevel.replace( ".", "/" );
+      stringBuilder.replace( 1, path.indexOf( "/", 1 ), topGroupIdLevel );
+      path = stringBuilder.toString();
+    }
+
     logger.debug( "path:    " + path );
     String fileName = requestURL.substring( requestURL.lastIndexOf( "/" ) + 1 );
     logger.debug( "fileName: " + fileName );
