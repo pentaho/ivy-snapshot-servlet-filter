@@ -31,14 +31,17 @@ public class IvySnapshotServletFilterTest {
 
   private static IvySnapshotServletFilter filter;
 
-  private static final String REQUESTED = "http://localhost:8081/nexus/content/repositories/pentaho/pentaho/ccc/8.0-SNAPSHOT/ccc-8.0-SNAPSHOT.jar";
-  private static final String REQUESTED_IVY = "http://ivy-nexus.pentaho.org/content.groups.omni.pentaho.pentaho-bi-platform-ee/8.1-SNAPSHOT/pentaho-bi-platform-ee-8.1-SNAPSHOT.jar";
-  private static final String REQUESTED_CLASSIFIER = "http://ivy-nexus.pentaho.org/content/groups/omni/pentaho/pentaho-bi-platform-ee/8.1-SNAPSHOT/pentaho-bi-platform-ee-8.1-SNAPSHOT-sources.jar";
-  private static final String REQUESTED_EXCEPTION = "http://ivy-nexus.pentaho.org/content/groups/omni/pentah/pentaho-bi-platform-ee/8.1-SNAPSHOT/pentaho-bi-platform-ee-8.1-SNAPSHOT.jar";
+  private static final String CONTEXT = "/nexus";
+
+  private static final String REQUESTED = "http://localhost:8081/nexus/content/repositories/omni/pentaho/pentaho-bi-platform-data-access/8.0-SNAPSHOT/pentaho-bi-platform-data-access-8.0-SNAPSHOT.jar";
+  private static final String REQUESTED_IVY = "http://localhost:8081/nexus/content.repositories.omni.pentaho.pentaho-bi-platform-data-access/8.0-SNAPSHOT/pentaho-bi-platform-data-access-8.0-SNAPSHOT.jar";
+  private static final String REQUESTED_IVY_PART = "http://localhost:8081/nexus/content/repositories/omni/pentaho.pentaho-bi-platform-data-access/8.0-SNAPSHOT/pentaho-bi-platform-data-access-8.0-SNAPSHOT.jar";
+  private static final String REQUESTED_CLASSIFIER = "http://localhost:8081/nexus/content/repositories/omni/pentaho/pentaho-bi-platform-data-access/8.0-SNAPSHOT/pentaho-bi-platform-data-access-8.0-SNAPSHOT-sources.jar";
+  private static final String REQUESTED_EXCEPTION = "http://localhost:8081/nexus/content/repositories/omni/pentah/pentaho-bi-platform-data-access/8.0-SNAPSHOT/pentaho-bi-platform-data-access-8.0-SNAPSHOT.jar";
   private static final String REQUESTED_NO_SNAPSHOT = "http://ivy-nexus.pentaho.org/content/groups/omni/log4j/log4j/1.2.15/log4j-1.2.15-SNAPSHOT.jar";
 
-  private static final String FORWARDING = "/nexus/content/repositories/pentaho/pentaho/ccc/8.0-SNAPSHOT/ccc-8.0-20170803.125544-387.jar";
-  private static final String FORWARDING_CLASSIFIER = "/content/groups/omni/pentaho/pentaho-bi-platform-ee/8.1-SNAPSHOT/pentaho-bi-platform-ee-8.1-20171101.174904-20-sources.jar";
+  private static final String FORWARDING = "/content/repositories/omni/pentaho/pentaho-bi-platform-data-access/8.0-SNAPSHOT/pentaho-bi-platform-data-access-8.0-20170803.131735-124.jar";
+  private static final String FORWARDING_CLASSIFIER = "/content/repositories/omni/pentaho/pentaho-bi-platform-data-access/8.0-SNAPSHOT/pentaho-bi-platform-data-access-8.0-20170803.131735-124-sources.jar";
 
   @Mock
   HttpServletRequest request;
@@ -48,11 +51,14 @@ public class IvySnapshotServletFilterTest {
   FilterChain chain;
   @Mock
   RequestDispatcher dispacher;
+  @Mock
+  ServletContext servletContext;
 
   @Before
   public void initialize() throws ServletException {
-    ServletContext servletContext = new MockServletContext();
     FilterConfig config = new MockFilterConfig( servletContext );
+    when( config.getServletContext().getContextPath() ).thenReturn( CONTEXT );
+
     filter = new IvySnapshotServletFilter();
     filter.init( config );
     when( request.getRequestDispatcher( any() ) ).thenReturn( dispacher );
@@ -81,7 +87,18 @@ public class IvySnapshotServletFilterTest {
   }
 
   @Test
-  public void filterWitchClassifierTest() throws ServletException, IOException {
+  public void filterIvyPartGroupTest() throws ServletException, IOException {
+
+    when( request.getRequestURL() ).thenReturn( new StringBuffer( REQUESTED_IVY_PART ) );
+
+    filter.doFilter( request, response, chain );
+
+    verify( request ).getRequestDispatcher( FORWARDING );
+    verify( chain, times( 0 ) ).doFilter(request,response);
+  }
+
+  @Test
+  public void filterWithClassifierTest() throws ServletException, IOException {
 
     when( request.getRequestURL() ).thenReturn( new StringBuffer( REQUESTED_CLASSIFIER ) );
 
