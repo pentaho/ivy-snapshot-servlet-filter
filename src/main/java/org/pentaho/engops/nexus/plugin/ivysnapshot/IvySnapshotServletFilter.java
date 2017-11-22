@@ -13,6 +13,7 @@ import javax.servlet.ServletRequest;
 import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
 
+import org.apache.http.HttpStatus;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -143,7 +144,7 @@ public class IvySnapshotServletFilter implements Filter {
     return latestSnapshotFilePath;
   }
 
-  private static CloseableHttpClient getHttpClient() {
+  protected CloseableHttpClient getHttpClient() {
     return HttpClients.createDefault();
   }
 
@@ -159,7 +160,7 @@ public class IvySnapshotServletFilter implements Filter {
       HttpGet httpGet = new HttpGet( mavenMetadataURL );
       CloseableHttpResponse httpResponse = httpClient.execute( httpGet );
       try {
-        if ( httpResponse.getStatusLine().getStatusCode() != 200 ) {
+        if ( httpResponse.getStatusLine().getStatusCode() != HttpStatus.SC_OK ) {
           throw new MavenMetadataNotFoundException( httpResponse.getStatusLine().getReasonPhrase() );
         }
         HttpEntity entity = httpResponse.getEntity();
