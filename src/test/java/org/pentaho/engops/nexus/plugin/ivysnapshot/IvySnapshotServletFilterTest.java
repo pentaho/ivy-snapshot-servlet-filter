@@ -49,6 +49,7 @@ public class IvySnapshotServletFilterTest {
   private static final String FORWARDING_CLASSIFIER = "/content/repositories/omni/pentaho/pentaho-bi-platform-data-access/8.0-SNAPSHOT/pentaho-bi-platform-data-access-8.0-20170803.131735-124-sources.jar";
 
   private static final String METADATA = "/maven-metadata.xml";
+  private static final String METADATA_NOT_FOUND = "/not-found-metadata.xml";
   private static final String METADATA_NO_SNAPSHOT = "/no-snapshot-metadata.xml";
 
   @Spy
@@ -148,6 +149,39 @@ public class IvySnapshotServletFilterTest {
   public void metadataNotParsableExceptionTest() throws ServletException, IOException {
 
     when( request.getRequestURL() ).thenReturn( new StringBuffer( REQUESTED_EXCEPTION ) );
+
+    filter.doFilter( request, response, chain );
+
+    verify( chain ).doFilter( request, response );
+  }
+
+  @Test
+  public void notFoundTest() throws ServletException, IOException {
+
+    when( request.getRequestURL() ).thenReturn( new StringBuffer( REQUESTED ) );
+    setMetadata( METADATA_NOT_FOUND );
+
+    filter.doFilter( request, response, chain );
+
+    verify( chain ).doFilter( request, response );
+  }
+
+  @Test
+  public void serverErrorTest() throws ServletException, IOException {
+
+    when( request.getRequestURL() ).thenReturn( new StringBuffer( REQUESTED ) );
+    when( httpResponse.getStatusLine() ).thenReturn( new BasicStatusLine( HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR, "INTERNAL SERVER ERROR!!" ) );
+
+    filter.doFilter( request, response, chain );
+
+    verify( chain ).doFilter( request, response );
+  }
+
+  @Test
+  public void emptyEntityTest() throws ServletException, IOException {
+
+    when( request.getRequestURL() ).thenReturn( new StringBuffer( REQUESTED ) );
+    when( httpResponse.getEntity() ).thenReturn( null );
 
     filter.doFilter( request, response, chain );
 
