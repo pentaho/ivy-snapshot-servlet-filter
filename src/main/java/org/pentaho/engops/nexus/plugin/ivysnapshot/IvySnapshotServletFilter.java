@@ -106,7 +106,6 @@ public class IvySnapshotServletFilter implements Filter {
     try {
       metadataXml = this.getMavenMetadataXml( protocol, serverPort, path );
     } catch ( MavenMetadataNotFoundException | IOException e ) {
-      logger.warn( e.getMessage() );
       throw new SnapshotNotFoundException( e.getMessage(), e );
     }
     logger.debug( "metadata: {}", metadataXml );
@@ -115,7 +114,6 @@ public class IvySnapshotServletFilter implements Filter {
     try {
       metadataDomDocument = this.getMetadataDomDocument( metadataXml );
     } catch ( MetadataNotParsableException e ) {
-      logger.warn( e.getMessage() );
       throw new SnapshotNotFoundException( e.getMessage(), e );
     }
     MavenGAV mavenGAV = this.getMavenGAV( metadataDomDocument, fileName );
