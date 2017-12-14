@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata modelVersion="1.1.0">
+  <groupId>pentaho</groupId>
+  <artifactId>pentaho-bi-platform-data-access</artifactId>
+  <version>8.0-SNAPSHOT</version>
+  <versioning>
+    <snapshot>
+      <timestamp>20170803.131735</timestamp>
+      <buildNumber>124</buildNumber>
+    </snapshot>
+    <lastUpdated>20170803131735</lastUpdated>
+  </versioning>
+</metadata>
