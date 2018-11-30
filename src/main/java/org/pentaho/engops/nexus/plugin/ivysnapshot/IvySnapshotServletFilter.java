@@ -1,27 +1,24 @@
 package org.pentaho.engops.nexus.plugin.ivysnapshot;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.StringReader;
+import java.util.Enumeration;
 
-import javax.inject.Named;
-import javax.inject.Singleton;
-import javax.servlet.Filter;
-import javax.servlet.FilterChain;
-import javax.servlet.FilterConfig;
 import javax.servlet.ServletException;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
+import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
 import org.apache.http.HttpStatus;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.servlet.http.HttpServletResponse;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
+import org.apache.http.Header;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -35,76 +32,158 @@ import org.xml.sax.InputSource;
 
 
 /**
- * @author smaring@pentaho.com
+ * @author steve.maring -at- hitachivantara.com
  */
-@Named
-@Singleton
-public class IvySnapshotServletFilter implements Filter {
+
+public class IvySnapshotServletFilter extends HttpServlet {
+
+  private static final long serialVersionUID = 1L;
 
   private static Logger logger = LoggerFactory.getLogger( IvySnapshotServletFilter.class );
-  private static String context;
-
-  @Override
-  public void init( FilterConfig filterConfig ) throws ServletException {
-    setContext( filterConfig.getServletContext().getContextPath() );
+  
+  public static String proxiedURL;
+  public static String redirectURL;
+  
+  
+  static {
+    proxiedURL = System.getProperty( "proxiedURL" );
+    redirectURL = System.getProperty( "redirectURL" );
+    // required property
+    if (proxiedURL == null) {
+      System.out.println("specify the proxied repo to pull artifacts from as (e.g.) -DproxiedURL=http://localhost:8081");
+      System.exit( 1 );
+    }
+    // required property
+    if (redirectURL == null) {
+      System.out.println("specify the URL to redirect the client to as (e.g.) -DredirectURL=http://nexus.pentaho.org");
+      System.exit( 1 );
+    }
+    
+    logger.debug( "proxiedURL: " + proxiedURL );
+    logger.debug( "redirectURL: " + redirectURL );
   }
+  
+  
+
 
   @Override
-  public void doFilter( ServletRequest request, ServletResponse response, FilterChain chain ) throws IOException,
-    ServletException {
+  public void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    
     if ( request instanceof HttpServletRequest ) {
       HttpServletRequest httpRequest = (HttpServletRequest) request;
       String requestURL = httpRequest.getRequestURL().toString();
+      String requestFileName = requestURL.substring( requestURL.lastIndexOf( '/' ) + 1 );
+      String requestPath = this.getRequestPath(requestURL);
       if ( requestURL.contains( "-SNAPSHOT-" ) || requestURL.contains( "-SNAPSHOT." ) ) {
-        logger.info( "    REQUESTED: {} from {}", httpRequest.getRequestURL(), httpRequest.getRemoteAddr() );
+        logger.info( "REQUESTED: {} from {}", httpRequest.getRequestURL(), httpRequest.getRemoteAddr() );
         try {
-          String latestSnapshotFilePath = getLatestSnapshotFilePath( requestURL );
-          logger.info( "FORWARDING TO: {}", latestSnapshotFilePath );
+          String latestSnapshotFilePath = getLatestSnapshotFilePath( requestPath, requestFileName );
+          logger.info( "   PROXYING {}", latestSnapshotFilePath );
 
-          /*
-           * ensure you add <dispatcher>FORWARD</dispatcher> to the Nexus web.xml GuiceFilter or this won't work ...
-           */
-          request.getRequestDispatcher( latestSnapshotFilePath ).forward( httpRequest, (HttpServletResponse) response );
-          return;
+          String proxyURL = proxiedURL + latestSnapshotFilePath;
+          logger.debug( "returning {}", proxyURL );
+          this.proxyDownload( proxyURL, httpRequest, response );
+          
         } catch ( SnapshotNotFoundException | IOException e ) {
           logger.warn( e.getMessage() );
         }
+      } else {
+        logger.debug( "redirecting to {}", redirectURL + requestPath + requestFileName );
+        response.sendRedirect( redirectURL + requestPath + requestFileName );
       }
     }
-    chain.doFilter( request, response );
+    
   }
-
-  @Override
-  public void destroy() {
-    logger.debug( "servlet life cycle finished" );
-  }
-
-  private String getLatestSnapshotFilePath( String requestURL ) throws SnapshotNotFoundException {
-    String protocol = requestURL.substring( 0, requestURL.indexOf( ':' ) );
-    logger.debug( "protocol: {}", protocol );
-    String serverPort = requestURL
+  
+  
+  private String getRequestPath( String requestURL ) {
+    String requestProtocol = requestURL.substring( 0, requestURL.indexOf( ':' ) );
+    String requestServerPort = requestURL
       .substring( requestURL.indexOf( "://" ) + 3, requestURL.indexOf( '/', requestURL.indexOf( "://" ) + 3 ) );
-    logger.debug( "serverPort: {}", serverPort );
-    logger.debug( "context: {}", getContext() );
-    String path =
-      requestURL
-        .substring( ( protocol + "://" + serverPort + getContext() ).length(), requestURL.lastIndexOf( '/' ) + 1 );
-    String topGroupIdLevel = path.substring( 1, path.substring( 1, path.length() - 1 ).lastIndexOf( '/' ) + 1 );
+    String requestPath =
+      requestURL.substring( ( requestProtocol + "://" + requestServerPort ).length(), requestURL.lastIndexOf( '/' ) + 1 );
+    /***** nexus3 seems to handle the dotted groupId in a single folder thing OK, this was creating problems with it activated ******/
+    /*
+    String topGroupIdLevel = requestPath.substring( 1, 
+        requestPath.substring( 1, requestPath.length() - 1 ).lastIndexOf( '/' ) + 1 );
     if ( topGroupIdLevel.contains( "." ) ) {
-      logger.debug( "requested path contains an Ivy group: {}", topGroupIdLevel );
-      StringBuilder stringBuilder = new StringBuilder( path );
+      logger.info( "requested path contains an Ivy group: {}", topGroupIdLevel );
+      StringBuilder stringBuilder = new StringBuilder( requestPath );
       topGroupIdLevel = topGroupIdLevel.replace( ".", "/" );
-      stringBuilder.replace( 1, path.substring( 1, path.length() - 1 ).lastIndexOf( '/' ) + 1, topGroupIdLevel );
-      path = stringBuilder.toString();
+      stringBuilder.replace( 1, 
+          requestPath.substring( 1, requestPath.length() - 1 ).lastIndexOf( '/' ) + 1, topGroupIdLevel );
+      requestPath = stringBuilder.toString();
     }
+    */
+    return requestPath;
+  }
 
-    logger.debug( "path:    {}", path );
-    String fileName = requestURL.substring( requestURL.lastIndexOf( '/' ) + 1 );
-    logger.debug( "fileName: {}", fileName );
+  
+  
+  private void proxyDownload(String proxyURL, HttpServletRequest request, HttpServletResponse response ) throws IOException {
+    OutputStream out = response.getOutputStream();
+    CloseableHttpClient httpClient = HttpClients.createDefault();
+    HttpGet httpGet = new HttpGet(proxyURL);
+    CloseableHttpResponse httpResponse = null;
+    try {
+      
+      Enumeration<String> headerNames = request.getHeaderNames();
+      while ( headerNames.hasMoreElements() ) {
+        String headerName = headerNames.nextElement();
+        if ( !(headerName.equals("If-Match") || headerName.equals("If-Modified-Since") ) ) {
+          String headerValue = request.getHeader( headerName );
+          httpGet.setHeader( headerName, headerValue );
+        }
+      }
+
+      httpResponse = httpClient.execute(httpGet);
+      
+      if ( httpResponse.getStatusLine().getStatusCode() != HttpStatus.SC_OK ) {
+        String message = httpResponse.getStatusLine().getStatusCode() + " : " + httpResponse.getStatusLine().getReasonPhrase() + " downloading " + request.getRequestURL().toString();
+        logger.warn( message );
+      }
+      
+      HttpEntity entity = httpResponse.getEntity();
+      
+      for (Header header : httpResponse.getAllHeaders()) {
+        if ( header.getName().equals( "Set-Cookie" ) ) {
+          String cookieValue = header.getValue();
+          if ( cookieValue.contains( "Path" ) ) {
+            String existingPath = cookieValue.substring( cookieValue.indexOf( "Path=" ) + 5, cookieValue.indexOf( ";", cookieValue.indexOf( "Path=" ) + 6 ) );
+            cookieValue = cookieValue.replace( existingPath, "/" );
+          }
+          response.setHeader( "Set-Cookie", cookieValue );
+        } else {
+          response.setHeader( header.getName(), header.getValue() );
+        }
+      }
+      
+      response.setStatus( httpResponse.getStatusLine().getStatusCode() );
+      
+      if (entity != null) {
+         entity.writeTo( out );
+      } else {
+        logger.warn( "error loading " + proxyURL );
+      }
+    } catch (Exception e) {
+      logger.warn( "error loading " + proxyURL, e );
+    } finally {
+      try {
+        httpResponse.close();
+      } catch ( IOException e ) {
+        logger.warn( "can't close connection", e );
+      }
+    }
+    out.close();
+  }
+  
+  
+
+  private String getLatestSnapshotFilePath( String requestPath, String requestFileName ) throws SnapshotNotFoundException {
 
     String metadataXml = "";
     try {
-      metadataXml = this.getMavenMetadataXml( protocol, serverPort, path );
+      metadataXml = this.getMavenMetadataXml(requestPath);
     } catch ( MavenMetadataNotFoundException | IOException e ) {
       throw new SnapshotNotFoundException( e.getMessage(), e );
     }
@@ -116,7 +195,7 @@ public class IvySnapshotServletFilter implements Filter {
     } catch ( MetadataNotParsableException e ) {
       throw new SnapshotNotFoundException( e.getMessage(), e );
     }
-    MavenGAV mavenGAV = this.getMavenGAV( metadataDomDocument, fileName );
+    MavenGAV mavenGAV = this.getMavenGAV( metadataDomDocument, requestFileName );
     logger.debug( "groupId: " + mavenGAV.getGroupId() );
     logger.debug( "artifactId: " + mavenGAV.getArtifactId() );
     logger.debug( "version: " + mavenGAV.getVersion() );
@@ -132,10 +211,10 @@ public class IvySnapshotServletFilter implements Filter {
     }
 
     String latestSnapshotFilePath =
-      path + mavenGAV.getArtifactId() + "-" + latestSnapshotVersion + "." + mavenGAV.getExtension();
+        requestPath + mavenGAV.getArtifactId() + "-" + latestSnapshotVersion + "." + mavenGAV.getExtension();
     if ( mavenGAV.getClassifier().length() > 0 ) {
       latestSnapshotFilePath =
-        path + mavenGAV.getArtifactId() + "-" + latestSnapshotVersion + "-" + mavenGAV.getClassifier() + "." + mavenGAV
+          requestPath + mavenGAV.getArtifactId() + "-" + latestSnapshotVersion + "-" + mavenGAV.getClassifier() + "." + mavenGAV
           .getExtension();
     }
 
@@ -146,10 +225,10 @@ public class IvySnapshotServletFilter implements Filter {
     return HttpClients.createDefault();
   }
 
-  private String getMavenMetadataXml( String protocol, String serverPort, String path )
+  private String getMavenMetadataXml( String requestPath )
     throws MavenMetadataNotFoundException, IOException {
 
-    String mavenMetadataURL = protocol + "://" + serverPort + getContext() + path + "maven-metadata.xml";
+    String mavenMetadataURL =  proxiedURL + requestPath + "maven-metadata.xml";
     logger.debug( "getting metadata file: {}", mavenMetadataURL );
 
     String metadataXml = "";
@@ -191,7 +270,7 @@ public class IvySnapshotServletFilter implements Filter {
   }
 
 
-  private MavenGAV getMavenGAV( Document metadataDomDocument, String fileName ) {
+  private MavenGAV getMavenGAV( Document metadataDomDocument, String requestFileName ) {
 
     NodeList groupIdNodeList = metadataDomDocument.getElementsByTagName( "groupId" );
     Element groupIdElement = (Element) groupIdNodeList.item( 0 );
@@ -205,15 +284,15 @@ public class IvySnapshotServletFilter implements Filter {
     Element versionElement = (Element) versionNodeList.item( 0 );
     String version = versionElement.getFirstChild().getNodeValue().trim();
 
-    int endOfVersionInFileName = fileName.indexOf( version ) + version.length();
+    int endOfVersionInFileName = requestFileName.indexOf( version ) + version.length();
     String classifier = "";
-    if ( fileName.substring( endOfVersionInFileName ).contains( "-" ) ) { // if there seems to be a classifier
+    if ( requestFileName.substring( endOfVersionInFileName ).contains( "-" ) ) { // if there seems to be a classifier
       // from the next character after "-" following the version to the first occurance of "." after the "-"
-      classifier = fileName.substring( fileName.indexOf( '-', endOfVersionInFileName ) + 1,
-        fileName.indexOf( '.', endOfVersionInFileName + 1 ) );
+      classifier = requestFileName.substring( requestFileName.indexOf( '-', endOfVersionInFileName ) + 1,
+          requestFileName.indexOf( '.', endOfVersionInFileName + 1 ) );
     }
     // from the next character after the first occurance of "." after the version to the end
-    String extension = fileName.substring( fileName.indexOf( '.', endOfVersionInFileName ) + 1 );
+    String extension = requestFileName.substring( requestFileName.indexOf( '.', endOfVersionInFileName ) + 1 );
 
     return new MavenGAV( groupId, artifactId, version, classifier, extension );
   }
@@ -281,14 +360,6 @@ public class IvySnapshotServletFilter implements Filter {
       }
     }
     return value;
-  }
-
-  private static void setContext( String context ) {
-    IvySnapshotServletFilter.context = context;
-  }
-
-  private static String getContext() {
-    return IvySnapshotServletFilter.context;
   }
 
 }
